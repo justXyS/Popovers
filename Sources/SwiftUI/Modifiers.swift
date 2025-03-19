@@ -62,81 +62,77 @@ struct PopoverModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        WindowReader { readWindow in
-            content
-
-                /// Read the frame of the source view.
-                .frameReader { frame in
-                    sourceFrame = frame
+        content
+        
+        /// Read the frame of the source view.
+            .frameReader { frame in
+                sourceFrame = frame
+            }
+        
+        /// Detect a state change in `$present`.
+            .onValueChange(of: present) { oldValue, newValue in
+                
+                /// Make sure there is a window first.
+                var window: UIWindow!
+//                print("[Popovers] - No window was found when presenting popover, falling back to key window. Please file a bug report (https://github.com/aheze/Popovers/issues).")
+                
+                if let keyWindow = UIApplication.shared.windows.first(where: \.isKeyWindow) {
+                    window = keyWindow
+                } else {
+                    print("[Popovers] - Key window was not found either, skipping popover presentation.")
+                    self.present = false
+                    self.popover = nil /// Remove the reference to the popover.
+                    return
                 }
-
-                /// Detect a state change in `$present`.
-                .onValueChange(of: present) { oldValue, newValue in
-
-                    /// Make sure there is a window first.
-                    var window: UIWindow! = readWindow
-                    if window == nil {
-                        print("[Popovers] - No window was found when presenting popover, falling back to key window. Please file a bug report (https://github.com/aheze/Popovers/issues).")
-
-                        if let keyWindow = UIApplication.shared.windows.first(where: \.isKeyWindow) {
-                            window = keyWindow
+                
+                /// `newValue` is true, so present the popover.
+                if newValue {
+                    guard popover == nil else { return }
+                    var attributes = Popover.Attributes()
+                    
+                    /// Set the default source frame to the source view.
+                    attributes.sourceFrame = {
+                        if case .absolute = attributes.position {
+                            return sourceFrame ?? .zero
                         } else {
-                            print("[Popovers] - Key window was not found either, skipping popover presentation.")
-                            self.present = false
-                            self.popover = nil /// Remove the reference to the popover.
-                            return
+                            return window.safeAreaLayoutGuide.layoutFrame
                         }
                     }
-
-                    /// `newValue` is true, so present the popover.
-                    if newValue {
-                        guard popover == nil else { return }
-                        var attributes = Popover.Attributes()
-
-                        /// Set the default source frame to the source view.
-                        attributes.sourceFrame = {
-                            if case .absolute = attributes.position {
-                                return sourceFrame ?? .zero
-                            } else {
-                                return window.safeAreaLayoutGuide.layoutFrame
-                            }
-                        }
-
-                        /// Build the attributes using the closure. If you supply a custom source frame, the default will be overridden.
-                        buildAttributes(&attributes)
-
-                        let popover = Popover(
-                            attributes: attributes,
-                            view: { view },
-                            background: { background }
-                        )
-
-                        /// Store a reference to the popover.
-                        self.popover = popover
-
-                        /**
-                         Listen to the internal `onDismiss` callback.
-
-                         This is called just after the popover is removed from the model.
-                         */
-                        popover.context.onAutoDismiss = {
-                            self.present = false
-                            self.popover = nil /// Remove the reference to the popover.
-                        }
-
-                        /// Present the popover.
-                        popover.present(in: window)
-
-                    } else {
-                        /// `$present` was set to `false`, dismiss the popover.
-
-                        /// If there is still a popover, it means the client set `$present` to false.
-                        guard let popover = popover else { return }
-
-                        popover.dismiss()
+                    
+                    /// Build the attributes using the closure. If you supply a custom source frame, the default will be overridden.
+                    buildAttributes(&attributes)
+                    
+                    let popover = Popover(
+                        attributes: attributes,
+                        view: { view },
+                        background: { background }
+                    )
+                    
+                    /// Store a reference to the popover.
+                    self.popover = popover
+                    
+                    /**
+                     Listen to the internal `onDismiss` callback.
+                     
+                     This is called just after the popover is removed from the model.
+                     */
+                    popover.context.onAutoDismiss = {
+                        self.present = false
+                        self.popover = nil /// Remove the reference to the popover.
                     }
+                    
+                    /// Present the popover.
+                    popover.present(in: window)
+                    
+                } else {
+                    /// `$present` was set to `false`, dismiss the popover.
+                    
+                    /// If there is still a popover, it means the client set `$present` to false.
+                    guard let popover = popover else { return }
+                    
+                    popover.dismiss()
                 }
-        }
+            }
     }
 }
 
